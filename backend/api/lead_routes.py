@@ -4,7 +4,7 @@ from backend.database.supabase_client import supabase
 from backend.schemas.lead_schema import LeadUpdate
 from backend.schemas.lead_schema import Lead
 from backend.schemas.company_profile_schema import CompanyProfile
-
+from backend.agent.agent import run_agent
 from backend.services.qualification_service import (
     qualify_lead,
     calculate_score,
@@ -178,4 +178,15 @@ def qualify_existing_lead(lead_id: int):
     return {
         "lead_id": lead_id,
         "qualification": saved_result.data[0]
+    }
+
+
+@router.post("/leads/{lead_id}/agent")
+def run_lead_agent(lead_id: int):
+
+    result = run_agent(lead_id)
+
+    return {
+        "lead_id": lead_id,
+        "agent": result.model_dump()
     }
