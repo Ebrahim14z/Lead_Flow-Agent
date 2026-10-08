@@ -6,6 +6,11 @@ class Lead(BaseModel):
     email: str
     company: str
     job_title: str
+    industry: str
+    company_size: int
+    budget: float
+    timeline: str
+    need: str
     message: str
 
 
@@ -14,4 +19,9 @@ class LeadUpdate(BaseModel):
     email: str
     company: str
     job_title: str
+    industry: str
+    company_size: int
+    budget: float
+    timeline: str
+    need: str
     message: str

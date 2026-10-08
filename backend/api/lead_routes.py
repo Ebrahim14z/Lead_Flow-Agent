@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from backend.database.supabase_client import supabase
 from backend.schemas.lead_schema import LeadUpdate
 from backend.schemas.lead_schema import Lead
+from backend.schemas.company_profile_schema import CompanyProfile
 
 from backend.services.qualification_service import (
     qualify_lead,
@@ -44,12 +45,17 @@ def get_lead(lead_id: int):
 def update_lead(lead_id: int, lead: LeadUpdate):
 
     lead_data = {
-        "name": lead.name,
-        "email": lead.email,
-        "company": lead.company,
-        "job_title": lead.job_title,
-        "message": lead.message,
-    }
+    "name": lead.name,
+    "email": lead.email,
+    "company": lead.company,
+    "job_title": lead.job_title,
+    "industry": lead.industry,
+    "company_size": lead.company_size,
+    "budget": lead.budget,
+    "timeline": lead.timeline,
+    "need": lead.need,
+    "message": lead.message,
+}
 
     response = (
         supabase
@@ -92,8 +98,8 @@ def delete_lead(lead_id: int):
 @router.post("/leads/{lead_id}/qualify")
 def qualify_existing_lead(lead_id: int):
 
-    # 1. Get lead from database
-    response = (
+    # Get lead
+    lead_response = (
         supabase
         .table("leads")
         .select("*")
@@ -101,24 +107,54 @@ def qualify_existing_lead(lead_id: int):
         .execute()
     )
 
-    if not response.data:
+    if not lead_response.data:
         return {
             "message": "Lead not found"
         }
 
-    # 2. Convert database data to Lead object
-    lead = Lead(**response.data[0])
+    lead = Lead(**lead_response.data[0])
 
-    # 3. Ask AI to evaluate the lead
-    result = qualify_lead(lead)
+    # Get company profile
+    company_response = (
+        supabase
+        .table("company_profiles")
+        .select("*")
+        .limit(1)
+        .execute()
+    )
 
-    # 4. Calculate deterministic score
+    if not company_response.data:
+        return {
+            "message": "Company profile not found"
+        }
+
+    company_data = company_response.data[0]
+
+    company_profile = CompanyProfile(
+        company_name=company_data["company_name"],
+        description=company_data["description"],
+        products=company_data["products"],
+        target_industries=company_data["target_industries"],
+        min_budget=company_data["min_budget"],
+        max_budget=company_data["max_budget"],
+        min_company_size=company_data["min_company_size"],
+        max_company_size=company_data["max_company_size"],
+        target_job_titles=company_data["target_job_titles"],
+    )
+
+    # Qualify lead using company profile
+    result = qualify_lead(
+        lead,
+        company_profile
+    )
+
+    # Calculate deterministic score
     score = calculate_score(result)
 
-    # 5. Determine lead category
+    # Determine category
     category = get_category(score)
 
-    # 6. Prepare qualification result
+    # Save qualification result
     qualification_data = {
         "lead_id": lead_id,
         "company_fit": result.company_fit,
@@ -132,7 +168,6 @@ def qualify_existing_lead(lead_id: int):
         "reason": result.reason,
     }
 
-    # 7. Save qualification result in database
     saved_result = (
         supabase
         .table("qualification_results")
@@ -140,7 +175,6 @@ def qualify_existing_lead(lead_id: int):
         .execute()
     )
 
-    # 8. Return result
     return {
         "lead_id": lead_id,
         "qualification": saved_result.data[0]

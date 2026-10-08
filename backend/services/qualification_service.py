@@ -5,6 +5,8 @@ from langchain_groq import ChatGroq
 
 from backend.schemas.lead_schema import Lead
 from backend.schemas.qualification_schema import QualificationResult
+from backend.schemas.company_profile_schema import CompanyProfile
+
 
 load_dotenv()
 
@@ -18,38 +20,154 @@ llm = ChatGroq(
 structured_llm = llm.with_structured_output(QualificationResult)
 
 
-def qualify_lead(lead: Lead) -> QualificationResult:
+def qualify_lead(
+    lead: Lead,
+    company_profile: CompanyProfile
+) -> QualificationResult:
 
     prompt = f"""
 You are a sales lead qualification assistant.
 
-Analyze the following lead:
+Your job is to evaluate a potential customer based on:
 
-Name: {lead.name}
-Email: {lead.email}
-Company: {lead.company}
-Job Title: {lead.job_title}
-Message: {lead.message}
+1. The lead information.
+2. The company profile and Ideal Customer Profile (ICP).
 
-Evaluate the lead using these factors:
+Do not invent information that is not provided.
 
-1. company_fit: How well does this lead appear to match the target customer profile? (0-10)
 
-2. need: How clearly does the lead have a problem or need that our product/service can solve? (0-10)
+====================
+COMPANY PROFILE
+====================
 
-3. intent: How strong is the lead's buying intent? (0-10)
+Company Name:
+{company_profile.company_name}
 
-4. budget_fit: How suitable does the stated budget appear to be? (0-10)
+Description:
+{company_profile.description}
 
-5. authority: How likely is the person to have decision-making authority? (0-10)
+Products / Services:
+{company_profile.products}
 
-6. urgency: How urgent is the customer's need? (0-10)
+Target Industries:
+{company_profile.target_industries}
 
-Important:
+Budget Range:
+${company_profile.min_budget} - ${company_profile.max_budget}
+
+Target Company Size:
+{company_profile.min_company_size} - {company_profile.max_company_size} employees
+
+Target Job Titles:
+{company_profile.target_job_titles}
+
+
+====================
+LEAD INFORMATION
+====================
+
+Name:
+{lead.name}
+
+Email:
+{lead.email}
+
+Company:
+{lead.company}
+
+Job Title:
+{lead.job_title}
+
+Industry:
+{lead.industry}
+
+Company Size:
+{lead.company_size} employees
+
+Budget:
+${lead.budget}
+
+Timeline:
+{lead.timeline}
+
+Need:
+{lead.need}
+
+Message:
+{lead.message}
+
+
+====================
+QUALIFICATION FACTORS
+====================
+
+1. company_fit:
+How well does the lead's company match the target
+industry and target company size?
+
+Compare the lead against the company's ICP.
+
+Score from 0 to 10.
+
+2. need:
+How clearly does the lead have a problem or need that
+the company's products/services can solve?
+
+Score from 0 to 10.
+
+3. intent:
+How strong is the lead's buying intent?
+
+Look for signals such as:
+- actively evaluating solutions
+- requesting information
+- requesting a meeting
+- discussing implementation
+- comparing providers
+
+Score from 0 to 10.
+
+4. budget_fit:
+How well does the lead's budget match the company's
+defined budget range?
+
+Use the company profile budget range as the reference.
+
+Score from 0 to 10.
+
+5. authority:
+How likely is the lead to have decision-making authority
+based on their job title?
+
+Compare the job title with the company's target job titles.
+
+Score from 0 to 10.
+
+6. urgency:
+How urgent is the lead's need based on the stated timeline?
+
+Score from 0 to 10.
+
+
+====================
+IMPORTANT RULES
+====================
+
 - Do not calculate an overall score.
-- Do not invent information that is not present.
-- Base each evaluation only on the available lead information.
-- Return a concise reason explaining the evaluation.
+- Do not invent information.
+- Use the company profile as the reference for company_fit,
+  budget_fit, and authority.
+- Do not assume that a larger company is automatically better.
+- Do not assume that a higher budget is automatically better.
+- A budget outside the company's range should negatively
+  affect budget_fit.
+- An industry outside the target industries should negatively
+  affect company_fit.
+- A company size outside the target range should negatively
+  affect company_fit.
+- A job title matching the target roles should positively
+  affect authority.
+- Return a concise explanation of the qualification.
 """
 
     result = structured_llm.invoke(prompt)
@@ -69,7 +187,6 @@ def calculate_score(result: QualificationResult) -> int:
     )
 
     return round(score)
-
 
 
 def get_category(score: int) -> str:
